@@ -425,10 +425,54 @@ class SignalGenerator:
 # Fonction de haut niveau
 # ─────────────────────────────────────────────
 
+def merge_institutional_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge les données institutionnelles historiques dans le DataFrame OHLCV.
+    Time-aligné : chaque barre 1h reçoit la valeur en vigueur à ce moment.
+    """
+    from src.data.collector import fetch_cot_gold, fetch_fred_macro
+    df = df.copy()
+
+    # ── COT CFTC (weekly → 1h via forward fill) ──────────────────────────────
+    try:
+        cot_df = fetch_cot_gold()
+        if not cot_df.empty:
+            cot_idx = cot_df.set_index("report_date").sort_index()
+            cot_idx.index = pd.to_datetime(cot_idx.index, utc=True)
+            for col in ["commercial_index", "large_spec_net"]:
+                if col in cot_idx.columns:
+                    df[col] = cot_idx[col].reindex(df.index, method="ffill")
+            # Signal directionnel (-1/0/+1)
+            if "cot_signal" in cot_idx.columns:
+                smap = {"BULLISH": 1.0, "BEARISH": -1.0, "NEUTRAL": 0.0}
+                df["cot_signal_num"] = (
+                    cot_idx["cot_signal"].map(smap)
+                    .reindex(df.index, method="ffill")
+                    .fillna(0.0)
+                )
+            logger.info(f"  COT mergé : {cot_df['commercial_index'].notna().sum()} semaines")
+    except Exception as e:
+        logger.warning(f"⚠️ COT merge : {e}")
+
+    # ── FRED macro (daily → 1h via forward fill) ──────────────────────────────
+    try:
+        macro_dict = fetch_fred_macro()
+        for series_id, series in macro_dict.items():
+            if hasattr(series, "index") and not series.empty:
+                s = series.copy()
+                s.index = pd.to_datetime(s.index, utc=True)
+                # lowercase pour correspondre au df.columns.str.lower() dans build_features
+                df[f"fred_{series_id.lower()}"] = s.reindex(df.index, method="ffill")
+        if macro_dict:
+            logger.info(f"  FRED mergé : {len(macro_dict)} séries")
+    except Exception as e:
+        logger.warning(f"⚠️ FRED merge : {e}")
+
+    return df
+
+
 def train_signal_model(timeframe: str = "1h", days: int = 730) -> SignalGenerator:
     """Charge les données, construit les features, entraîne et sauvegarde."""
-    from src.data.collector import fetch_cot_gold, fetch_fred_macro
-
     generator = SignalGenerator()
 
     logger.info("📊 Chargement des données pour entraînement LightGBM...")
@@ -437,20 +481,20 @@ def train_signal_model(timeframe: str = "1h", days: int = 730) -> SignalGenerato
         logger.error("❌ Pas de données — lance d'abord src.main")
         return generator
 
-    # Données complémentaires
-    cot_df     = fetch_cot_gold()
-    macro_dict = fetch_fred_macro()
+    # Merger les données institutionnelles historiques (time-alignées)
+    logger.info("🌍 Merge données institutionnelles (COT + FRED)...")
+    df_prices = merge_institutional_data(df_prices)
 
     # Régime HMM actuel
     regime_name, confidence = get_current_regime(timeframe)
     regime_id = {"RANGE": 0, "TREND": 1, "CHAOS": 2}.get(regime_name, 0)
 
-    # Features
+    # Features (inclut maintenant institutional_features_from_df)
     logger.info("⚙️  Calcul des features...")
-    df_features = build_features(df_prices, cot_df, macro_dict, regime_id, confidence)
+    df_features = build_features(df_prices, None, None, regime_id, confidence)
 
     # Entraînement
-    metrics = generator.train(df_features, df_prices, cot_df, macro_dict)
+    metrics = generator.train(df_features, df_prices, None, None)
 
     return generator
 

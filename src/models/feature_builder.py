@@ -391,6 +391,56 @@ def china_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ═══════════════════════════════════════════════════════════════
+# BLOC — Features institutionnelles pré-mergées (live_pipeline ou train)
+# Lues directement depuis df si les colonnes existent déjà
+# ═══════════════════════════════════════════════════════════════
+
+def institutional_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Lit les features institutionnelles time-alignées depuis df.
+
+    Ces colonnes sont ajoutées par :
+      - fetch_all_live()      : pipeline live (inference)
+      - merge_institutional() : pipeline training (retrain)
+
+    Retourne un DataFrame vide si aucune colonne n'est présente.
+    """
+    out = pd.DataFrame(index=df.index)
+
+    # COT CFTC (weekly forward-filled)
+    if "commercial_index" in df.columns:
+        out["inst_cot_index"]     = df["commercial_index"].ffill().fillna(50.0)
+    if "cot_signal_num" in df.columns:
+        out["inst_cot_direction"] = df["cot_signal_num"].ffill().fillna(0.0)
+    if "large_spec_net" in df.columns:
+        out["inst_spec_net"]      = df["large_spec_net"].ffill().fillna(0.0)
+
+    # FRED macro (daily forward-filled) — colonnes en lowercase après build_features
+    fred_cols = {
+        "fred_dff":      "inst_fed_rate",
+        "fred_t10y2y":   "inst_yield_curve",
+        "fred_dtwexbgs": "inst_dollar_index",
+    }
+    for src, dst in fred_cols.items():
+        if src in df.columns:
+            out[dst] = df[src].ffill().fillna(0.0)
+
+    # ETF flows (daily forward-filled)
+    if "etf_combined_flow" in df.columns:
+        out["inst_etf_flow"] = df["etf_combined_flow"].ffill().fillna(1.0)
+
+    # Sentiment contrarian MyFxBook
+    if "sentiment_contrarian" in df.columns:
+        out["inst_retail_contrarian"] = df["sentiment_contrarian"].ffill().fillna(0.0)
+
+    if not out.empty:
+        n = out.notna().all(axis=1).sum()
+        logger.debug(f"  Institutional features : {len(out.columns)} colonnes, {n} lignes complètes")
+
+    return out
+
+
+# ═══════════════════════════════════════════════════════════════
 # ETF FLOWS — Signal institutionnel (World Gold Council + stefan-jansen GitHub)
 # ═══════════════════════════════════════════════════════════════
 
@@ -676,6 +726,7 @@ def build_features(
         china_features(df),
         etf_flow_features(df),
         multitf_features(df),
+        institutional_features(df),   # COT/FRED/ETF/Sentiment time-alignés
     ]
 
     features = pd.concat(frames, axis=1, join='inner')
