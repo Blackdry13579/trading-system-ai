@@ -40,6 +40,9 @@ data/cache/
 .DS_Store
 Thumbs.db
 
+# Claude Code (mémoire et sessions locales)
+.claude/
+
 # Graphify output (recréable avec graphify update .)
 graphify-out/
 
