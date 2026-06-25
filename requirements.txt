@@ -1,0 +1,40 @@
+# ============================================================
+# DÉPENDANCES GOLDBOT
+# ============================================================
+
+# ── Base de données ──────────────────────────────────────
+psycopg2-binary==2.9.9          # Connexion PostgreSQL/TimescaleDB
+sqlalchemy==2.0.36              # ORM Python pour les requêtes SQL
+
+# ── Données de marché ────────────────────────────────────
+yfinance>=0.2.50                # Données gold gratuites (GC=F futures)
+pandas==2.2.3                   # Manipulation de données
+numpy==1.26.4                   # Calculs numériques
+ta>=0.11.0                      # Indicateurs techniques (RSI, EMA, ATR, MACD...)
+
+# ── Machine Learning ─────────────────────────────────────
+lightgbm==4.5.0                 # Signal scoring 0-100
+hmmlearn==0.3.3                 # Hidden Markov Model (régimes TREND/RANGE/CHAOS)
+scikit-learn==1.5.2             # Preprocessing, métriques
+joblib==1.4.2                   # Sauvegarde des modèles
+
+# ── Données macro ────────────────────────────────────────
+fredapi==0.5.2                  # FRED API (données économiques US)
+requests==2.32.3                # HTTP pour COT CFTC, autres APIs
+
+# ── IA / NIM ─────────────────────────────────────────────
+openai==1.57.0                  # Client compatible NVIDIA NIM (API OpenAI-like)
+
+# ── Telegram Bot ─────────────────────────────────────────
+python-telegram-bot==21.9       # Bot Telegram (contrôle depuis téléphone)
+
+# ── Utilitaires ──────────────────────────────────────────
+python-dotenv==1.0.1            # Lecture du fichier .env
+schedule==1.2.2                 # Planification des tâches (alternative légère à n8n)
+loguru==0.7.2                   # Logs propres et colorés
+pytz==2024.2                    # Gestion des fuseaux horaires
+aiohttp==3.11.10                # HTTP asynchrone
+
+# ── Visualisation (optionnel, pour les tests locaux) ─────
+matplotlib==3.9.3               # Graphiques en local
+plotly==5.24.1                  # Graphiques interactifs

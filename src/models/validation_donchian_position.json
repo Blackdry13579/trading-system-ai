@@ -1,0 +1,40 @@
+{
+  "feature": "donchian_position",
+  "ic_mean": -0.2538,
+  "icir": -1.098,
+  "tstat": -82.09,
+  "n_obs": 5656,
+  "alpha_decay": {
+    "1": -0.14719399002813194,
+    "2": -0.19443913957020387,
+    "4": -0.2537622536778711,
+    "8": -0.3273848487186544,
+    "16": -0.400402032725647,
+    "24": -0.4563687451716991,
+    "48": -0.514178833814522
+  },
+  "orthogonality": {
+    "max_corr": 0.892,
+    "max_feat": "price_vs_ema50_4h",
+    "high_corrs": {
+      "price_vs_ema50_4h": 0.892,
+      "price_vs_ema200": 0.849,
+      "trend_4h_bullish": 0.767,
+      "multitf_bullish_confluence": 0.744,
+      "returns_1w": 0.713
+    },
+    "is_redundant": "True"
+  },
+  "regime_ic": {},
+  "yearly_ic": {
+    "2025": 0.0316,
+    "2026": 0.0583
+  },
+  "marginal_auc": {
+    "auc_base": 0.5362,
+    "auc_augmented": 0.508,
+    "delta_auc": -0.0282,
+    "improves": "False"
+  },
+  "verdict": "\u274c REJECT"
+}
