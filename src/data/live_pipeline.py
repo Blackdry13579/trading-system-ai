@@ -245,6 +245,32 @@ def fetch_myfxbook_sentiment() -> dict:
         return default
 
 
+# ── 6. NIM Sentiment (cache 1h via sentiment_analyzer) ───────────────────────
+
+def fetch_nim_sentiment() -> dict:
+    """Score de sentiment news gold via DeepSeek v4 Flash (NVIDIA NIM). Cache 1h."""
+    cached = _cache_get("nim_sentiment")
+    if cached is not None:
+        logger.debug("  NIM sentiment : depuis cache")
+        return cached
+
+    default = {"nim_sentiment": 0.0}
+    try:
+        from src.ai.sentiment_analyzer import get_sentiment_score
+        result_nim = get_sentiment_score()
+        result = {"nim_sentiment": result_nim.get("nim_sentiment", 0.0)}
+        logger.info(
+            f"  NIM sentiment : {result['nim_sentiment']:+.2f} "
+            f"({result_nim.get('headlines_count', 0)} headlines)"
+        )
+    except Exception as e:
+        logger.warning(f"⚠️ NIM sentiment : {e}")
+        result = default
+
+    _cache_set("nim_sentiment", result, 3600)
+    return result
+
+
 # ── Pipeline Principal ────────────────────────────────────────────────────────
 
 def fetch_all_live(period: str = "120d") -> pd.DataFrame | None:
@@ -281,6 +307,10 @@ def fetch_all_live(period: str = "120d") -> pd.DataFrame | None:
             df[key] = val
 
     for key, val in fetch_myfxbook_sentiment().items():
+        if isinstance(val, (int, float)):
+            df[key] = val
+
+    for key, val in fetch_nim_sentiment().items():
         if isinstance(val, (int, float)):
             df[key] = val
 

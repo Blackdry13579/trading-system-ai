@@ -25,7 +25,8 @@ load_dotenv()
 
 NIM_BASE_URL = os.getenv("NIM_BASE_URL", "http://localhost:8000/v1")
 NIM_API_KEY  = os.getenv("NIM_API_KEY", "nim-local-key")
-NIM_MODEL    = "deepseek-ai/deepseek-r1"  # adapter selon le modèle chargé dans NIM
+NIM_MODEL    = os.getenv("NIM_MODEL", "deepseek-ai/deepseek-v4-flash")
+NIM_FALLBACK = "moonshotai/kimi-k2.6"
 
 _CACHE: dict[str, tuple] = {}
 
@@ -64,14 +65,10 @@ def fetch_gold_headlines(max_headlines: int = 10) -> list[str]:
         return []
 
 
-def fetch_fxstreet_headlines() -> list[str]:
-    """
-    Headlines gold depuis FXStreet RSS (gratuit, pas d'auth).
-    Source de qualité — couvre XAU/USD en temps réel.
-    """
+def fetch_rss_headlines(url: str, source: str) -> list[str]:
+    """Générique RSS parser pour n'importe quelle source gold."""
     try:
         import xml.etree.ElementTree as ET
-        url = "https://rss.fxstreet.com/news/currencies/xau/usd"
         r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
         if r.status_code != 200:
             return []
@@ -81,11 +78,24 @@ def fetch_fxstreet_headlines() -> list[str]:
             title = item.find("title")
             if title is not None and title.text:
                 headlines.append(title.text.strip())
-        logger.debug(f"  {len(headlines)} headlines FXStreet")
+        logger.debug(f"  {len(headlines)} headlines {source}")
         return headlines[:10]
     except Exception as e:
-        logger.warning(f"⚠️ FXStreet RSS : {e}")
+        logger.warning(f"⚠️ {source} RSS : {e}")
         return []
+
+
+def fetch_fxstreet_headlines() -> list[str]:
+    """Headlines gold depuis plusieurs sources RSS."""
+    sources = [
+        ("https://feeds.kitco.com/KitcoNewsRSS", "Kitco"),
+        ("https://rss.fxstreet.com/news/currencies/xau/usd", "FXStreet"),
+        ("https://www.forexlive.com/feed/news", "ForexLive"),
+    ]
+    headlines = []
+    for url, name in sources:
+        headlines += fetch_rss_headlines(url, name)
+    return headlines[:15]
 
 
 # ── Analyse DeepSeek via NIM ──────────────────────────────────────────────────
@@ -114,23 +124,27 @@ Réponse attendue (exemple) :
 {{"score": 0.3, "reason": "légèrement bullish — hausse des tensions géopolitiques"}}"""
 
     try:
-        r = requests.post(
-            f"{NIM_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {NIM_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": NIM_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 100,
-                "temperature": 0.1,
-            },
-            timeout=15,
-        )
+        for model in [NIM_MODEL, NIM_FALLBACK]:
+            r = requests.post(
+                f"{NIM_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {NIM_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 100,
+                    "temperature": 0.1,
+                },
+                timeout=20,
+            )
+            if r.status_code == 200:
+                break
+            logger.warning(f"⚠️ {model} erreur {r.status_code}, fallback...")
 
         if r.status_code != 200:
-            logger.warning(f"⚠️ NIM API erreur {r.status_code}")
+            logger.warning(f"⚠️ NIM API tous les modèles ont échoué")
             return 0.0
 
         content = r.json()["choices"][0]["message"]["content"].strip()
